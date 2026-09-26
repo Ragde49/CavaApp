@@ -30,3 +30,6 @@ La app no debe conectarse directamente a SQL Server. Se propone un API HTTPS:
 8. App sincroniza catálogo publicado.
 
 Esto permite que cada etiqueta investigada se procese una sola vez y después quede reutilizable por todos los usuarios.
+
+
+Build automático activo en GitHub Actions.
