@@ -1,35 +1,22 @@
 # CavaApp
 
-MVP Android para registrar una cava, visualizar perfiles sensoriales y proponer maridajes por estructura.
+Repositorio único para **Android + API ASP.NET Core 8**.
 
-## Stack
-- Kotlin + Jetpack Compose
-- Material 3 con lenguaje visual expresivo
-- Catálogo inicial de 22 vinos
-- Radar sensorial dibujado nativamente
-- Motor de maridaje local
-- Alta manual de nuevas etiquetas con almacenamiento local
-- GitHub Actions genera APK debug en cada push a `main`
+## Arquitectura
+Android -> HTTPS -> Cava API (IIS) -> SQL Server Cava
 
-## Regla de calidad de datos
-- `CONFIRMADO`: dato explícito de etiqueta/productor/ficha.
-- `DERIVADO`: descriptor del vino concreto convertido a escala 1–5.
-- `ESTIMADO`: inferencia por variedad, región, crianza o radar no cuantificado.
-- `NULL`: no hay evidencia suficiente; nunca se convierte a cero en lógica de negocio.
+La app **ya no usa un catálogo embebido**. Consume:
+- GET /api/vinos
+- GET /api/vinos/{id}
+- POST /api/maridajes/calcular
 
-## Próxima fase: nuevas etiquetas
-La app no debe conectarse directamente a SQL Server. Se propone un API HTTPS:
+La URL de la API se configura dentro de la app en la pestaña **API**.
 
-1. App toma foto frontal y trasera.
-2. `POST /api/labels` guarda solicitud e imágenes.
-3. Backend intenta identificar el vino en catálogo.
-4. Si existe, devuelve el perfil existente.
-5. Si no existe, crea registro `PENDIENTE_REVISION`.
-6. Un proceso de investigación/IA completa datos con fuente y confianza.
-7. Un administrador valida y publica como `CONFIRMADO`, `DERIVADO` o `ESTIMADO`.
-8. App sincroniza catálogo publicado.
+## Altas de nuevas etiquetas
+Por decisión del proyecto, no se insertan desde el teléfono. Se envían fotografías frontal/reverso para investigación y se genera un INSERT/UPDATE SQL revisado. Tras ejecutarlo en SQL Server, la app lo ve al sincronizar.
 
-Esto permite que cada etiqueta investigada se procese una sola vez y después quede reutilizable por todos los usuarios.
+## Builds
+- Android: workflow `Android APK`
+- API IIS: workflow `Cava API IIS`
 
-
-Build automático activo en GitHub Actions.
+Consulta `DEPLOY-IIS.md` para publicar la API.
