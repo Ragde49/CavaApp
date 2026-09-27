@@ -427,7 +427,7 @@ private fun PairingWizard(apiUrl:String,openWine:(WineItem)->Unit) {
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(onClick={step--},modifier=Modifier.weight(1f).height(54.dp),shape=RoundedCornerShape(20.dp)){Icon(Icons.Default.ArrowBack,null);Spacer(Modifier.width(6.dp));Text("Atrás")}
                     Button(
-                        onClick={if(step==questions.lastIndex){{calculate()}}else{{step++}}},
+                        onClick={ if(step==questions.lastIndex) calculate() else step++ },
                         modifier=Modifier.weight(1f).height(54.dp),
                         shape=RoundedCornerShape(20.dp),
                         enabled=!loading
