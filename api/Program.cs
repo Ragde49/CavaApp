@@ -59,13 +59,76 @@ app.Run();
 
 static int Score(WineDto w,PairingRequest f){
     double sum=0,weight=0;
+
+    // 1) Intensidad del plato vs intensidad/cuerpo del vino
     var wi=w.Intensidad is null?(w.Cuerpo is null?null:(double?)w.Cuerpo):(double?)w.Intensidad;
-    if(wi is not null){sum+=(1-Math.Clamp(Math.Abs(wi.Value-f.Intensidad)/4,0,1))*.4;weight+=.4;}
-    var vals=new[]{w.Tanino,w.Acidez}.Where(x=>x is not null).Select(x=>(double)x!.Value).ToList();
-    if(vals.Count>0){var s=vals.Average()/5;var need=f.Grasa/5;sum+=(1-Math.Clamp(Math.Abs(s-need),0,1))*.35;weight+=.35;}
-    if(w.Madera is not null){sum+=(1-Math.Clamp(Math.Abs((double)w.Madera.Value-f.Tostado)/4,0,1))*.15;weight+=.15;}
-    sum+=((w.ConfianzaPerfil??50)/100.0)*.10;weight+=.10;
-    return (int)Math.Round(Math.Clamp(sum/weight*100,0,100));
+    if(wi is not null){
+        var match=1-Math.Clamp(Math.Abs(wi.Value-f.Intensidad)/4,0,1);
+        sum+=match*.25; weight+=.25;
+    }
+
+    // 2) Grasa: premia tanino y acidez que limpian/estructuran
+    var structureVals=new[]{w.Tanino,w.Acidez}.Where(x=>x is not null).Select(x=>(double)x!.Value).ToList();
+    if(structureVals.Count>0){
+        var structure=structureVals.Average()/5.0;
+        var need=f.Grasa/5.0;
+        var match=1-Math.Clamp(Math.Abs(structure-need),0,1);
+        sum+=match*.20; weight+=.20;
+    }
+
+    // 3) Acidez del plato: el vino debe tener acidez suficiente
+    if(w.Acidez is not null){
+        var wineAcidity=(double)w.Acidez.Value;
+        var deficit=Math.Max(0,f.Acidez-wineAcidity);
+        var match=1-Math.Clamp(deficit/4.0,0,1);
+        sum+=match*.12; weight+=.12;
+    }
+
+    // 4) Dulzor: si el plato es dulce, un vino demasiado seco pierde compatibilidad
+    if(w.Dulzor is not null){
+        var wineSweet=(double)w.Dulzor.Value;
+        var deficit=Math.Max(0,f.Dulzor-wineSweet);
+        var match=1-Math.Clamp(deficit/4.0,0,1);
+        sum+=match*.10; weight+=.10;
+    }
+
+    // 5) Picante: alcohol y tanino altos pueden amplificar el calor
+    if(w.AlcoholPorcentaje is not null || w.Tanino is not null){
+        var alcohol=(double)(w.AlcoholPorcentaje??13m);
+        var tannin=(double)(w.Tanino??2.5m);
+        var heat=((Math.Max(0,alcohol-12)/4.0)+(tannin/5.0))/2.0;
+        var spiceNeed=f.Picante/5.0;
+        var match=1-Math.Clamp(spiceNeed*heat,0,1);
+        sum+=match*.10; weight+=.10;
+    }
+
+    // 6) Umami: tanino muy alto puede sentirse más seco/amargo
+    if(w.Tanino is not null){
+        var tannin=(double)w.Tanino.Value/5.0;
+        var umami=f.Umami/5.0;
+        var match=1-Math.Clamp(umami*tannin*.65,0,1);
+        sum+=match*.08; weight+=.08;
+    }
+
+    // 7) Tostado/ahumado: premia madera/crianza compatible
+    if(w.Madera is not null){
+        var match=1-Math.Clamp(Math.Abs((double)w.Madera.Value-f.Tostado)/4,0,1);
+        sum+=match*.08; weight+=.08;
+    }
+
+    // 8) Sal: la sal suele llevarse bien con acidez y puede suavizar tanino
+    if(w.Acidez is not null || w.Tanino is not null){
+        var acid=(double)(w.Acidez??2.5m)/5.0;
+        var tannin=(double)(w.Tanino??2.5m)/5.0;
+        var salt=f.Salado/5.0;
+        var benefit=Math.Clamp((acid*.6+tannin*.4)*salt,0,1);
+        sum+=(0.65+0.35*benefit)*.05; weight+=.05;
+    }
+
+    // Confianza del perfil del vino
+    sum+=((w.ConfianzaPerfil??50)/100.0)*.02; weight+=.02;
+
+    return weight<=0?0:(int)Math.Round(Math.Clamp(sum/weight*100,0,100));
 }
 static string Explain(WineDto w,PairingRequest f){
     var p=new List<string>();
