@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,8 +17,11 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,6 +33,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 private val Wine = Color(0xFF7B1E3A)
 private val WineDark = Color(0xFF4E1025)
@@ -166,13 +173,16 @@ private fun JSONObject.optNullableInt(key:String):Int? =
 private fun JSONObject.optNullableDouble(key:String):Double? =
     if(!has(key)||isNull(key)) null else optDouble(key)
 
+enum class AppScreen { MENU, PAIRING, CAVA, SETTINGS }
+
 @Composable
 fun CavaApp(context:Context) {
     val prefs=remember{context.getSharedPreferences("cava",Context.MODE_PRIVATE)}
     var apiUrl by remember{mutableStateOf(prefs.getString("api_url","")?:"")}
-    var tab by remember{mutableStateOf(0)}
+    var screen by remember{mutableStateOf(AppScreen.MENU)}
     var wines by remember{mutableStateOf<List<WineItem>>(emptyList())}
     var selected by remember{mutableStateOf<WineItem?>(null)}
+    var detailReturn by remember{mutableStateOf(AppScreen.CAVA)}
     var loading by remember{mutableStateOf(false)}
     var error by remember{mutableStateOf<String?>(null)}
     val scope=rememberCoroutineScope()
@@ -187,26 +197,135 @@ fun CavaApp(context:Context) {
         }
     }
 
+    fun openWine(w:WineItem, from:AppScreen) {
+        detailReturn=from
+        selected=w
+    }
+
     LaunchedEffect(apiUrl){ if(apiUrl.isNotBlank()) refreshWines() }
 
     Scaffold(
         containerColor=Cream,
         bottomBar={
-            NavigationBar(containerColor=Color.White) {
-                NavigationBarItem(tab==0,{tab=0;selected=null},{Icon(Icons.Default.Restaurant,null)},label={Text("Maridar")})
-                NavigationBarItem(tab==1,{tab=1;selected=null},{Icon(Icons.Default.WineBar,null)},label={Text("Mi cava")})
-                NavigationBarItem(tab==2,{tab=2;selected=null},{Icon(Icons.Default.Settings,null)},label={Text("API")})
+            if(selected==null && screen!=AppScreen.SETTINGS) {
+                NavigationBar(containerColor=Color.White) {
+                    NavigationBarItem(screen==AppScreen.MENU,{screen=AppScreen.MENU},{Icon(Icons.Default.Home,null)},label={Text("Inicio")})
+                    NavigationBarItem(screen==AppScreen.CAVA,{screen=AppScreen.CAVA},{Icon(Icons.Default.WineBar,null)},label={Text("Mi cava")})
+                    NavigationBarItem(screen==AppScreen.PAIRING,{screen=AppScreen.PAIRING},{Icon(Icons.Default.Restaurant,null)},label={Text("Maridaje")})
+                }
             }
         }
     ){p->
         Box(Modifier.padding(p)) {
             when {
-                selected!=null -> WineDetail(selected!!){selected=null}
-                tab==0 -> PairingWizard(apiUrl){selected=it}
-                tab==1 -> WinesScreen(wines,loading,error,{selected=it},{refreshWines()})
-                else -> ApiSettings(apiUrl,{url->
-                    apiUrl=url.trim();prefs.edit().putString("api_url",apiUrl).apply();refreshWines()
-                },{refreshWines()})
+                selected!=null -> WineDetail(selected!!){
+                    selected=null
+                    screen=detailReturn
+                }
+                screen==AppScreen.MENU -> MenuScreen(
+                    wineCount=wines.size,
+                    apiConfigured=apiUrl.isNotBlank(),
+                    onPairing={screen=AppScreen.PAIRING},
+                    onCellar={screen=AppScreen.CAVA},
+                    onSettings={screen=AppScreen.SETTINGS}
+                )
+                screen==AppScreen.PAIRING -> PairingWizard(apiUrl){openWine(it,AppScreen.PAIRING)}
+                screen==AppScreen.CAVA -> WinesScreen(wines,loading,error,{openWine(it,AppScreen.CAVA)},{refreshWines()})
+                screen==AppScreen.SETTINGS -> ApiSettings(
+                    current=apiUrl,
+                    onSave={url->
+                        apiUrl=url.trim()
+                        prefs.edit().putString("api_url",apiUrl).apply()
+                        refreshWines()
+                        screen=AppScreen.MENU
+                    },
+                    onRefresh={refreshWines()},
+                    onBack={screen=AppScreen.MENU}
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuScreen(
+    wineCount:Int,
+    apiConfigured:Boolean,
+    onPairing:()->Unit,
+    onCellar:()->Unit,
+    onSettings:()->Unit
+) {
+    LazyColumn(
+        contentPadding=PaddingValues(20.dp),
+        verticalArrangement=Arrangement.spacedBy(18.dp)
+    ) {
+        item {
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("CAVA",fontSize=38.sp,fontWeight=FontWeight.Black,letterSpacing=3.sp,color=WineDark)
+                    Text("Tu asistente de maridaje",fontSize=17.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick=onSettings) {
+                    Icon(Icons.Default.Settings,"Configurar API",tint=Wine)
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier=Modifier.fillMaxWidth().clickable{onPairing()},
+                colors=CardDefaults.cardColors(containerColor=WineDark),
+                shape=RoundedCornerShape(34.dp)
+            ) {
+                Column(Modifier.padding(24.dp)) {
+                    Box(Modifier.size(62.dp).background(Color.White.copy(alpha=.12f),CircleShape),contentAlignment=Alignment.Center) {
+                        Icon(Icons.Default.Restaurant,null,tint=Color.White,modifier=Modifier.size(34.dp))
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Text("Maridaje",color=Color.White,fontSize=30.sp,fontWeight=FontWeight.Black)
+                    Text("Dime qué vas a comer. Te hago unas preguntas y cruzamos el plato contra los vinos que tienes.",color=Color.White.copy(alpha=.84f),fontSize=16.sp)
+                    Spacer(Modifier.height(18.dp))
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        Text("Encontrar el mejor vino",color=Color.White,fontWeight=FontWeight.Bold)
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Default.ArrowForward,null,tint=Color.White)
+                    }
+                }
+            }
+        }
+
+        item {
+            ElevatedCard(
+                modifier=Modifier.fillMaxWidth().clickable{onCellar()},
+                shape=RoundedCornerShape(34.dp)
+            ) {
+                Column(Modifier.padding(24.dp)) {
+                    Box(Modifier.size(62.dp).background(MaterialTheme.colorScheme.primaryContainer,CircleShape),contentAlignment=Alignment.Center) {
+                        Icon(Icons.Default.WineBar,null,tint=Wine,modifier=Modifier.size(34.dp))
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Text("Mi cava",fontSize=30.sp,fontWeight=FontWeight.Black)
+                    Text("Entra directo a tus botellas, busca etiquetas y revisa el perfil y las gráficas de cada vino.",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=16.sp)
+                    Spacer(Modifier.height(18.dp))
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        Text(if(apiConfigured) "$wineCount vinos disponibles" else "Configura primero la API",fontWeight=FontWeight.Bold,color=Wine)
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Default.ArrowForward,null,tint=Wine)
+                    }
+                }
+            }
+        }
+
+        if(!apiConfigured) {
+            item {
+                Card(colors=CardDefaults.cardColors(containerColor=Color(0xFFFFE8C2)),shape=RoundedCornerShape(24.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning,null,tint=Wine)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Falta configurar la dirección HTTPS de la API para cargar tu cava y calcular maridajes.",Modifier.weight(1f))
+                        TextButton(onClick=onSettings){Text("Configurar")}
+                    }
+                }
             }
         }
     }
@@ -426,9 +545,10 @@ private fun WinesScreen(wines:List<WineItem>,loading:Boolean,error:String?,open:
 }
 
 @Composable
-private fun ApiSettings(current:String,onSave:(String)->Unit,onRefresh:()->Unit) {
+private fun ApiSettings(current:String,onSave:(String)->Unit,onRefresh:()->Unit,onBack:()->Unit) {
     var value by remember(current){mutableStateOf(current)}
     Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
+        IconButton(onClick=onBack){Icon(Icons.Default.ArrowBack,null)}
         Text("Conexión API",fontSize=36.sp,fontWeight=FontWeight.Black)
         Text("Los vinos y el motor de maridaje viven en tu API de IIS.")
         OutlinedTextField(value,{value=it},Modifier.fillMaxWidth(),label={Text("URL HTTPS de Cava API")},placeholder={Text("https://cavaapi.midominio.com")},shape=RoundedCornerShape(22.dp),singleLine=true)
@@ -456,8 +576,59 @@ private fun WineDetail(w:WineItem,back:()->Unit) {
                 }
             }
         }
+        item {
+            ElevatedCard(shape=RoundedCornerShape(28.dp)) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("Gráfica sensorial",fontSize=21.sp,fontWeight=FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    WineRadar(
+                        values=listOf(w.body,w.tannin,w.acidity,w.sweetness,w.intensity,w.fruit,w.oak),
+                        modifier=Modifier.fillMaxWidth().height(280.dp)
+                    )
+                    Text("Cuerpo · Tanino · Acidez · Dulzor · Intensidad · Fruta · Madera",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
         item{Metric("Cuerpo",w.body)};item{Metric("Tanino",w.tannin)};item{Metric("Acidez",w.acidity)}
         item{Metric("Dulzor",w.sweetness)};item{Metric("Intensidad",w.intensity)};item{Metric("Fruta",w.fruit)};item{Metric("Madera",w.oak)}
+    }
+}
+
+@Composable
+private fun WineRadar(values:List<Double?>,modifier:Modifier=Modifier) {
+    Canvas(modifier) {
+        val count=values.size
+        val center=Offset(size.width/2f,size.height/2f)
+        val radius=minOf(size.width,size.height)*0.36f
+        fun point(index:Int,r:Float):Offset {
+            val angle=(-PI/2.0+2.0*PI*index/count).toFloat()
+            return Offset(center.x+cos(angle)*r,center.y+sin(angle)*r)
+        }
+
+        for(level in 1..5) {
+            val p=Path()
+            for(i in 0 until count) {
+                val pt=point(i,radius*level/5f)
+                if(i==0)p.moveTo(pt.x,pt.y) else p.lineTo(pt.x,pt.y)
+            }
+            p.close()
+            drawPath(p,Color(0xFFD7C8CC),style=Stroke(1.5f))
+        }
+        for(i in 0 until count) drawLine(Color(0xFFD7C8CC),center,point(i,radius),1.5f)
+
+        val polygon=Path()
+        for(i in 0 until count) {
+            val v=(values[i]?:0.0).coerceIn(0.0,5.0)
+            val pt=point(i,(radius*(v/5.0)).toFloat())
+            if(i==0)polygon.moveTo(pt.x,pt.y) else polygon.lineTo(pt.x,pt.y)
+        }
+        polygon.close()
+        drawPath(polygon,Wine.copy(alpha=.18f))
+        drawPath(polygon,Wine,style=Stroke(5f))
+
+        values.forEachIndexed{i,v->
+            if(v!=null) drawCircle(Wine,6f,point(i,(radius*(v.coerceIn(0.0,5.0)/5.0)).toFloat()))
+        }
     }
 }
 
