@@ -4,11 +4,12 @@ using Microsoft.Data.SqlClient;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 var app = builder.Build();
+app.UseStaticFiles();
 
 const string wineSql = """
 SELECT V.VinoID,V.Productor,V.Nombre,V.Anada,V.Pais,V.Region,V.Denominacion,V.UvaPrincipal,V.Mezcla,
 V.AlcoholPorcentaje,V.CrianzaMeses,V.CrianzaRecipiente,V.TemperaturaServicioC,V.TieneRadarEtiqueta,
-V.NotasTecnicas,V.NivelDatosTecnicos,V.FuenteTecnica,
+V.NotasTecnicas,V.NivelDatosTecnicos,V.FuenteTecnica,V.ImagenUrl,
 P.Cuerpo,P.Tanino,P.Acidez,P.Dulzor,P.Intensidad,P.Fruta,P.Madera,P.TipoPerfil,P.ConfianzaPerfil,P.FuentePerfil,P.NotasPerfil
 FROM dbo.Vinos V
 LEFT JOIN dbo.VinoPerfilSensorial P ON P.VinoID=V.VinoID
@@ -142,6 +143,6 @@ static string Explain(WineDto w,PairingRequest f){
     return string.Join("; ",p)+".";
 }
 
-public sealed record WineDto(int VinoID,string? Productor,string Nombre,short? Anada,string? Pais,string? Region,string? Denominacion,string? UvaPrincipal,string? Mezcla,decimal? AlcoholPorcentaje,short? CrianzaMeses,string? CrianzaRecipiente,decimal? TemperaturaServicioC,bool TieneRadarEtiqueta,string? NotasTecnicas,string? NivelDatosTecnicos,string? FuenteTecnica,decimal? Cuerpo,decimal? Tanino,decimal? Acidez,decimal? Dulzor,decimal? Intensidad,decimal? Fruta,decimal? Madera,string? TipoPerfil,byte? ConfianzaPerfil,string? FuentePerfil,string? NotasPerfil);
+public sealed record WineDto(int VinoID,string? Productor,string Nombre,short? Anada,string? Pais,string? Region,string? Denominacion,string? UvaPrincipal,string? Mezcla,decimal? AlcoholPorcentaje,short? CrianzaMeses,string? CrianzaRecipiente,decimal? TemperaturaServicioC,bool TieneRadarEtiqueta,string? NotasTecnicas,string? NivelDatosTecnicos,string? FuenteTecnica,string? ImagenUrl,decimal? Cuerpo,decimal? Tanino,decimal? Acidez,decimal? Dulzor,decimal? Intensidad,decimal? Fruta,decimal? Madera,string? TipoPerfil,byte? ConfianzaPerfil,string? FuentePerfil,string? NotasPerfil);
 public sealed record PairingRequest(string? NombrePlato,double Intensidad,double Grasa,double Acidez,double Dulzor,double Picante,double Umami,double Tostado,double Salado,int Top=5);
 public sealed record PairingResult(WineDto Wine,int Score,string Reason);
