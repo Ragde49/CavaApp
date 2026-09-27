@@ -2,6 +2,7 @@ package net.softcame.cavaapp
 
 import android.content.Context
 import android.os.Bundle
+import coil.compose.AsyncImage
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,7 +85,8 @@ data class WineItem(
     val fruit:Double?,
     val oak:Double?,
     val profileType:String?,
-    val confidence:Int?
+    val confidence:Int?,
+    val imageUrl:String?
 )
 
 data class FoodProfile(
@@ -102,6 +105,11 @@ data class PairingResult(val wine:WineItem,val score:Int,val reason:String)
 
 class ApiClient(private val baseUrl:String) {
     private fun endpoint(path:String)=baseUrl.trimEnd('/')+path
+    private fun resolveImageUrl(path:String?):String? {
+        if(path.isNullOrBlank()) return null
+        if(path.startsWith("http://",true)||path.startsWith("https://",true)) return path
+        return baseUrl.trimEnd('/')+"/"+path.trimStart('/')
+    }
 
     suspend fun getWines():List<WineItem> = withContext(Dispatchers.IO) {
         val conn=(URL(endpoint("/api/vinos")).openConnection() as HttpURLConnection).apply {
@@ -162,7 +170,8 @@ class ApiClient(private val baseUrl:String) {
         fruit=o.optNullableDouble("fruta"),
         oak=o.optNullableDouble("madera"),
         profileType=o.optNullableString("tipoPerfil"),
-        confidence=o.optNullableInt("confianzaPerfil")
+        confidence=o.optNullableInt("confianzaPerfil"),
+        imageUrl=resolveImageUrl(o.optNullableString("imagenUrl"))
     )
 }
 
@@ -491,6 +500,8 @@ private fun PairingResults(
             ElevatedCard(Modifier.fillMaxWidth().clickable{openWine(x.wine)},shape=RoundedCornerShape(26.dp)) {
                 Column(Modifier.padding(18.dp)) {
                     Row(verticalAlignment=Alignment.CenterVertically) {
+                        WineImage(x.wine,Modifier.size(62.dp,82.dp))
+                        Spacer(Modifier.width(12.dp))
                         Box(Modifier.size(52.dp).background(Wine,CircleShape),contentAlignment=Alignment.Center){
                             Text(x.score.toString(),color=Color.White,fontWeight=FontWeight.Black)
                         }
@@ -513,6 +524,36 @@ private fun PairingResults(
     }
 }
 
+
+@Composable
+private fun WineImage(
+    w:WineItem,
+    modifier:Modifier,
+    contentScale:ContentScale=ContentScale.Crop
+) {
+    if(!w.imageUrl.isNullOrBlank()) {
+        Card(
+            modifier=modifier,
+            shape=RoundedCornerShape(18.dp),
+            colors=CardDefaults.cardColors(containerColor=Color(0xFFF3EEEC))
+        ) {
+            AsyncImage(
+                model=w.imageUrl,
+                contentDescription="Etiqueta de "+w.name,
+                modifier=Modifier.fillMaxSize(),
+                contentScale=contentScale
+            )
+        }
+    } else {
+        Box(
+            modifier.background(MaterialTheme.colorScheme.primaryContainer,RoundedCornerShape(18.dp)),
+            contentAlignment=Alignment.Center
+        ) {
+            Icon(Icons.Default.WineBar,null,tint=Wine,modifier=Modifier.size(34.dp))
+        }
+    }
+}
+
 @Composable
 private fun WinesScreen(wines:List<WineItem>,loading:Boolean,error:String?,open:(WineItem)->Unit,refresh:()->Unit) {
     var q by remember{mutableStateOf("")}
@@ -530,7 +571,7 @@ private fun WinesScreen(wines:List<WineItem>,loading:Boolean,error:String?,open:
             items(filtered){w->
                 ElevatedCard(Modifier.fillMaxWidth().clickable{open(w)},shape=RoundedCornerShape(24.dp)) {
                     Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically) {
-                        Icon(Icons.Default.WineBar,null,tint=Wine,modifier=Modifier.size(38.dp))
+                        WineImage(w,Modifier.size(62.dp,82.dp))
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(w.name,fontWeight=FontWeight.Bold)
@@ -566,6 +607,9 @@ private fun WineDetail(w:WineItem,back:()->Unit) {
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item{IconButton(onClick=back){Icon(Icons.Default.ArrowBack,null)}}
         item{Text(w.name,fontSize=30.sp,fontWeight=FontWeight.Black);Text(listOfNotNull(w.producer,w.vintage?.toString(),w.region,w.country).joinToString(" · "))}
+        if(!w.imageUrl.isNullOrBlank()) {
+            item { WineImage(w,Modifier.fillMaxWidth().height(320.dp),ContentScale.Fit) }
+        }
         item {
             Card(colors=CardDefaults.cardColors(containerColor=WineDark),shape=RoundedCornerShape(28.dp)) {
                 Column(Modifier.padding(20.dp)) {
