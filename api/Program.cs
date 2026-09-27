@@ -45,7 +45,7 @@ app.MapGet("/api/vinos/{id:int}",async(int id)=>{
 });
 
 app.MapPost("/api/maridajes/calcular",async(PairingRequest r)=>{
-    if(new[]{r.Intensidad,r.Grasa,r.Acidez,r.Dulzor,r.Umami,r.Tostado}.Any(x=>x<1||x>5))
+    if(new[]{r.Intensidad,r.Grasa,r.Acidez,r.Dulzor,r.Picante,r.Umami,r.Tostado,r.Salado}.Any(x=>x<1||x>5))
         return Results.BadRequest(new{error="Todos los valores deben estar entre 1 y 5."});
     await using var db=Db();
     var wines=(await db.QueryAsync<WineDto>(wineSql)).ToList();
@@ -73,10 +73,12 @@ static string Explain(WineDto w,PairingRequest f){
     if(i is not null)p.Add(Math.Abs(i.Value-f.Intensidad)<=.75?"intensidad muy compatible":"intensidad compatible");
     if(f.Grasa>=4 && ((w.Tanino??0)+(w.Acidez??0))>=6)p.Add("tanino/acidez ayudan con la grasa");
     if(f.Tostado>=3.5 && (w.Madera??0)>=3)p.Add("la crianza acompaña el tostado");
+    if(f.Picante>=4 && (w.AlcoholPorcentaje??0)>=14)p.Add("el alcohol puede sentirse más intenso con picante");
+    if(f.Salado>=4 && (w.Tanino??0)>=3)p.Add("la sal puede suavizar la percepción del tanino");
     if(p.Count==0)p.Add("perfil incompleto; recomendación con menor evidencia");
     return string.Join("; ",p)+".";
 }
 
 public sealed record WineDto(int VinoID,string? Productor,string Nombre,short? Anada,string? Pais,string? Region,string? Denominacion,string? UvaPrincipal,string? Mezcla,decimal? AlcoholPorcentaje,short? CrianzaMeses,string? CrianzaRecipiente,decimal? TemperaturaServicioC,bool TieneRadarEtiqueta,string? NotasTecnicas,string? NivelDatosTecnicos,string? FuenteTecnica,decimal? Cuerpo,decimal? Tanino,decimal? Acidez,decimal? Dulzor,decimal? Intensidad,decimal? Fruta,decimal? Madera,string? TipoPerfil,byte? ConfianzaPerfil,string? FuentePerfil,string? NotasPerfil);
-public sealed record PairingRequest(double Intensidad,double Grasa,double Acidez,double Dulzor,double Umami,double Tostado,int Top=5);
+public sealed record PairingRequest(string? NombrePlato,double Intensidad,double Grasa,double Acidez,double Dulzor,double Picante,double Umami,double Tostado,double Salado,int Top=5);
 public sealed record PairingResult(WineDto Wine,int Score,string Reason);
