@@ -29,7 +29,7 @@ app.MapGet("/api/health",async()=>{
         var ok=await db.ExecuteScalarAsync<int>("SELECT 1");
         return Results.Ok(new{status=ok==1?"ok":"error",database="Cava"});
     } catch(Exception ex) {
-        return Results.Problem("No se pudo conectar a Cava",detail:ex.Message,statusCode:503);
+        return Results.Problem(title:"No se pudo conectar a Cava",detail:ex.Message,statusCode:503);
     }
 });
 
